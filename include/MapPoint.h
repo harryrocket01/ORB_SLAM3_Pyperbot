@@ -1,7 +1,7 @@
 /**
 * This file is part of ORB-SLAM3
 *
-* Copyright (C) 2017-2021 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+* Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
 * Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
 *
 * ORB-SLAM3 is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -20,15 +20,12 @@
 #ifndef MAPPOINT_H
 #define MAPPOINT_H
 
-#include "KeyFrame.h"
-#include "Frame.h"
-#include "Map.h"
-#include "Converter.h"
+#include"KeyFrame.h"
+#include"Frame.h"
+#include"Map.h"
 
-#include "SerializationUtils.h"
-
-#include <opencv2/core/core.hpp>
-#include <mutex>
+#include<opencv2/core/core.hpp>
+#include<mutex>
 
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/array.hpp>
@@ -43,6 +40,31 @@ class Frame;
 
 class MapPoint
 {
+    template<class Archive>
+    void serializeMatrix(Archive &ar, cv::Mat& mat, const unsigned int version)
+    {
+        int cols, rows, type;
+        bool continuous;
+
+        if (Archive::is_saving::value) {
+            cols = mat.cols; rows = mat.rows; type = mat.type();
+            continuous = mat.isContinuous();
+        }
+
+        ar & cols & rows & type & continuous;
+        if (Archive::is_loading::value)
+            mat.create(rows, cols, type);
+
+        if (continuous) {
+            const unsigned int data_size = rows * cols * mat.elemSize();
+            ar & boost::serialization::make_array(mat.ptr(), data_size);
+        } else {
+            const unsigned int row_size = cols*mat.elemSize();
+            for (int i = 0; i < rows; i++) {
+                ar & boost::serialization::make_array(mat.ptr(i), row_size);
+            }
+        }
+    }
 
     friend class boost::serialization::access;
     template<class Archive>
@@ -53,46 +75,45 @@ class MapPoint
         ar & mnFirstFrame;
         ar & nObs;
         // Variables used by the tracking
-        //ar & mTrackProjX;
-        //ar & mTrackProjY;
-        //ar & mTrackDepth;
-        //ar & mTrackDepthR;
-        //ar & mTrackProjXR;
-        //ar & mTrackProjYR;
-        //ar & mbTrackInView;
-        //ar & mbTrackInViewR;
-        //ar & mnTrackScaleLevel;
-        //ar & mnTrackScaleLevelR;
-        //ar & mTrackViewCos;
-        //ar & mTrackViewCosR;
-        //ar & mnTrackReferenceForFrame;
-        //ar & mnLastFrameSeen;
+        ar & mTrackProjX;
+        ar & mTrackProjY;
+        ar & mTrackDepth;
+        ar & mTrackDepthR;
+        ar & mTrackProjXR;
+        ar & mTrackProjYR;
+        ar & mbTrackInView;
+        ar & mbTrackInViewR;
+        ar & mnTrackScaleLevel;
+        ar & mnTrackScaleLevelR;
+        ar & mTrackViewCos;
+        ar & mTrackViewCosR;
+        ar & mnTrackReferenceForFrame;
+        ar & mnLastFrameSeen;
 
         // Variables used by local mapping
-        //ar & mnBALocalForKF;
-        //ar & mnFuseCandidateForKF;
+        ar & mnBALocalForKF;
+        ar & mnFuseCandidateForKF;
 
         // Variables used by loop closing and merging
-        //ar & mnLoopPointForKF;
-        //ar & mnCorrectedByKF;
-        //ar & mnCorrectedReference;
-        //serializeMatrix(ar,mPosGBA,version);
-        //ar & mnBAGlobalForKF;
-        //ar & mnBALocalForMerge;
-        //serializeMatrix(ar,mPosMerge,version);
-        //serializeMatrix(ar,mNormalVectorMerge,version);
+        ar & mnLoopPointForKF;
+        ar & mnCorrectedByKF;
+        ar & mnCorrectedReference;
+        serializeMatrix(ar,mPosGBA,version);
+        ar & mnBAGlobalForKF;
+        ar & mnBALocalForMerge;
+        serializeMatrix(ar,mPosMerge,version);
+        serializeMatrix(ar,mNormalVectorMerge,version);
 
         // Protected variables
-        ar & boost::serialization::make_array(mWorldPos.data(), mWorldPos.size());
-        ar & boost::serialization::make_array(mNormalVector.data(), mNormalVector.size());
+        serializeMatrix(ar,mWorldPos,version);
         //ar & BOOST_SERIALIZATION_NVP(mBackupObservationsId);
-        //ar & mObservations;
         ar & mBackupObservationsId1;
         ar & mBackupObservationsId2;
+        serializeMatrix(ar,mNormalVector,version);
         serializeMatrix(ar,mDescriptor,version);
         ar & mBackupRefKFId;
-        //ar & mnVisible;
-        //ar & mnFound;
+        ar & mnVisible;
+        ar & mnFound;
 
         ar & mbBad;
         ar & mBackupReplacedId;
@@ -104,19 +125,17 @@ class MapPoint
 
 
 public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     MapPoint();
 
-    MapPoint(const Eigen::Vector3f &Pos, KeyFrame* pRefKF, Map* pMap);
+    MapPoint(const cv::Mat &Pos, KeyFrame* pRefKF, Map* pMap);
     MapPoint(const double invDepth, cv::Point2f uv_init, KeyFrame* pRefKF, KeyFrame* pHostKF, Map* pMap);
-    MapPoint(const Eigen::Vector3f &Pos,  Map* pMap, Frame* pFrame, const int &idxF);
+    MapPoint(const cv::Mat &Pos,  Map* pMap, Frame* pFrame, const int &idxF);
 
-    void SetWorldPos(const Eigen::Vector3f &Pos);
-    Eigen::Vector3f GetWorldPos();
+    void SetWorldPos(const cv::Mat &Pos);
 
-    Eigen::Vector3f GetNormal();
-    void SetNormalVector(const Eigen::Vector3f& normal);
+    cv::Mat GetWorldPos();
 
+    cv::Mat GetNormal();
     KeyFrame* GetReferenceKeyFrame();
 
     std::map<KeyFrame*,std::tuple<int,int>> GetObservations();
@@ -146,6 +165,7 @@ public:
     cv::Mat GetDescriptor();
 
     void UpdateNormalAndDepth();
+    void SetNormalVector(cv::Mat& normal);
 
     float GetMinDistanceInvariance();
     float GetMaxDistanceInvariance();
@@ -188,13 +208,13 @@ public:
     long unsigned int mnLoopPointForKF;
     long unsigned int mnCorrectedByKF;
     long unsigned int mnCorrectedReference;    
-    Eigen::Vector3f mPosGBA;
+    cv::Mat mPosGBA;
     long unsigned int mnBAGlobalForKF;
     long unsigned int mnBALocalForMerge;
 
     // Variable used by merging
-    Eigen::Vector3f mPosMerge;
-    Eigen::Vector3f mNormalVectorMerge;
+    cv::Mat mPosMerge;
+    cv::Mat mNormalVectorMerge;
 
 
     // Fopr inverse depth optimization
@@ -210,7 +230,7 @@ public:
 protected:    
 
      // Position in absolute coordinates
-     Eigen::Vector3f mWorldPos;
+     cv::Mat mWorldPos;
 
      // Keyframes observing the point and associated index in keyframe
      std::map<KeyFrame*,std::tuple<int,int> > mObservations;
@@ -219,7 +239,7 @@ protected:
      std::map<long unsigned int, int> mBackupObservationsId2;
 
      // Mean viewing direction
-     Eigen::Vector3f mNormalVector;
+     cv::Mat mNormalVector;
 
      // Best descriptor to fast matching
      cv::Mat mDescriptor;
@@ -244,11 +264,9 @@ protected:
 
      Map* mpMap;
 
-     // Mutex
      std::mutex mMutexPos;
      std::mutex mMutexFeatures;
      std::mutex mMutexMap;
-
 };
 
 } //namespace ORB_SLAM

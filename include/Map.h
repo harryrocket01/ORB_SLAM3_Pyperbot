@@ -1,7 +1,7 @@
 /**
 * This file is part of ORB-SLAM3
 *
-* Copyright (C) 2017-2021 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+* Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
 * Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
 *
 * ORB-SLAM3 is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
@@ -49,10 +49,10 @@ class Map
         ar & mnInitKFid;
         ar & mnMaxKFid;
         ar & mnBigChangeIdx;
-
-        // Save/load a set structure, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
+        // Set of KeyFrames and MapPoints, in this version the set serializator is not working
         //ar & mspKeyFrames;
         //ar & mspMapPoints;
+
         ar & mvpBackupKeyFrames;
         ar & mvpBackupMapPoints;
 
@@ -65,10 +65,13 @@ class Map
         ar & mbIsInertial;
         ar & mbIMU_BA1;
         ar & mbIMU_BA2;
+
+        ar & mnInitKFid;
+        ar & mnMaxKFid;
+        ar & mnLastLoopKFid;
     }
 
 public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Map();
     Map(int initKFid);
     ~Map();
@@ -115,7 +118,8 @@ public:
     void SetImuInitialized();
     bool isImuInitialized();
 
-    void ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool bScaledVel=false);
+    void RotateMap(const cv::Mat &R);
+    void ApplyScaledRotation(const cv::Mat &R, const float s, const bool bScaledVel=false, const cv::Mat t=cv::Mat::zeros(cv::Size(1,3),CV_32F));
 
     void SetInertialSensor();
     bool IsInertial();
@@ -131,7 +135,7 @@ public:
     unsigned int GetLowerKFID();
 
     void PreSave(std::set<GeometricCamera*> &spCams);
-    void PostLoad(KeyFrameDatabase* pKFDB, ORBVocabulary* pORBVoc/*, map<long unsigned int, KeyFrame*>& mpKeyFrameId*/, map<unsigned int, GeometricCamera*> &mpCams);
+    void PostLoad(KeyFrameDatabase* pKFDB, ORBVocabulary* pORBVoc, map<long unsigned int, KeyFrame*>& mpKeyFrameId, map<unsigned int, GeometricCamera*> &mpCams);
 
     void printReprojectionError(list<KeyFrame*> &lpLocalWindowKFs, KeyFrame* mpCurrentKF, string &name, string &name_folder);
 
@@ -151,10 +155,6 @@ public:
 
     static long unsigned int nNextId;
 
-    // DEBUG: show KFs which are used in LBA
-    std::set<long unsigned int> msOptKFs;
-    std::set<long unsigned int> msFixedKFs;
-
 protected:
 
     long unsigned int mnId;
@@ -162,7 +162,6 @@ protected:
     std::set<MapPoint*> mspMapPoints;
     std::set<KeyFrame*> mspKeyFrames;
 
-    // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
     std::vector<MapPoint*> mvpBackupMapPoints;
     std::vector<KeyFrame*> mvpBackupKeyFrames;
 
@@ -181,7 +180,7 @@ protected:
 
     long unsigned int mnInitKFid;
     long unsigned int mnMaxKFid;
-    //long unsigned int mnLastLoopKFid;
+    long unsigned int mnLastLoopKFid;
 
     // Index related to a big change in the map (loop closure, global BA)
     int mnBigChangeIdx;
@@ -198,9 +197,7 @@ protected:
     bool mbIMU_BA1;
     bool mbIMU_BA2;
 
-    // Mutex
     std::mutex mMutexMap;
-
 };
 
 } //namespace ORB_SLAM3
